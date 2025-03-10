@@ -5,7 +5,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
-import { ArticleIndexDto } from './dto/article-index.dto';
+import { ArticleIndexDto, SearchDto } from './dto/article-index.dto';
 
 @Injectable()
 export class AppService {
@@ -42,6 +42,7 @@ export class AppService {
                 content: { type: 'text', analyzer: 'word_delimiter' },
                 description: { type: 'text', analyzer: 'word_delimiter' },
                 tags: { type: 'keyword' },
+                category: { type: 'text' },
                 publishedAt: { type: 'date', index: false },
                 imageUrl: { type: 'keyword', index: false },
                 authorName: { type: 'keyword', index: false },
@@ -64,18 +65,19 @@ export class AppService {
       body: data,
     });
   }
-  public async search(text: string) {
+  public async search(searchDto: SearchDto) {
+    console.log(searchDto)
     const index = this.configService.get('ES_INDEX') as string;
-    const pagination: any = {
-      page: 1,
-      limit: 10,
-    };
-    const skippedItems = (pagination.page - 1) * pagination.limit;
+    // const pagination: any = {
+    //   page: 1,
+    //   limit: 10,
+    // };
+    // const skippedItems = (pagination.page - 1) * pagination.limit;
     const { body } = await this.esService.search<any>({
       index,
-      body: this.buildSearchQuery(text),
-      from: skippedItems,
-      size: pagination.limit,
+      body: this.buildSearchQuery(searchDto),
+      // from: skippedItems,
+      // size: pagination.limit,
     });
     const totalCount = body.hits.total.value;
     const hits = body.hits.hits;
@@ -104,9 +106,10 @@ export class AppService {
     };
   }
 
-  public buildSearchQuery(text: string) {
-    const query: any[] = [];
-    query.push({
+  public buildSearchQuery(searchDto: SearchDto) {
+    const { text, category, tags } = searchDto;
+    const mustQuery: any[] = [];
+    mustQuery.push({
       multi_match: {
         query: `${text}`,
         type: 'cross_fields',
@@ -114,10 +117,28 @@ export class AppService {
         operator: 'or',
       },
     });
+
+    const filterQuery: any[] = [];
+    if (category && category !== '') {
+      filterQuery.push({
+        term: {
+          category: category,
+        },
+      });
+    }
+    if (tags && tags.length > 0) {
+      filterQuery.push({
+        terms: {
+          tags: tags,
+        },
+      });
+    }
+
     return {
       query: {
         bool: {
-          must: query,
+          must: mustQuery,
+          filter: filterQuery,
         },
       },
     };

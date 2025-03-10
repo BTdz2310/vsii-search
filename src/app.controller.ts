@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Controller, Get, Inject, Post, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 import { EventPattern } from '@nestjs/microservices';
@@ -23,8 +25,20 @@ export class AppController {
   }
 
   @Get('search')
-  search(@Query('text') text: string) {
-    return this.appService.search(text);
+  search(@Query() query: any) {
+    console.log(query);
+    return this.appService.search({
+      text: query.text ?? '',
+      tags:
+        Array.isArray(query) && query.length > 0
+          ? query
+          : query && typeof query === 'object' && 'tags' in query
+            ? Array.isArray(query.tags)
+              ? query.tags
+              : [query.tags]
+            : [],
+      category: query.category ?? '',
+    });
   }
 
   @Get('home')
